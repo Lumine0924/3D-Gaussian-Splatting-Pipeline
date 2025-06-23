@@ -1,101 +1,94 @@
-# 3D-Gaussian-Splatting-Pipeline
-A comprehensive end-to-end Python pipeline for 3D object reconstruction and novel-view synthesis using 3D Gaussian Splatting, with COLMAP-based camera estimation, NeRF baselines comparison, GPU/CPU support, and quantitative PSNR/SSIM evaluation.
+# 3D Gaussian Splatting & NeRF 一键流水线
 
+本项目提供从数据采集到新视图合成的完整自动化工作流，主要功能包括：
 
-## Repository Structure
+1. **数据准备**：支持直接导入视频并自动提取关键帧，或导入多视角拍摄图片。
+2. **相机参数标定**：调用 COLMAP 完成特征提取、匹配与稀疏重建，输出相机位姿信息。
+3. **模型训练与渲染**：分别运行 3D Gaussian Splatting 与 NeRF（基础与加速版本）进行训练，并在指定轨迹下渲染环绕视频。
+4. **定量评估**：根据用户选择的测试集（视频或图片），计算 PSNR/SSIM 指标，比较三种方法的合成效果。
+5. **结果输出**：所有中间和最终结果均保存在 `output/` 目录，包含相机参数、渲染视频、对比图像及评估报告。
+
+---
+
+## 安装与依赖
+
+* **操作系统**：Windows/macOS/Linux
+* **必备环境**：Python 3.8+，COLMAP（命令行工具需加入系统 PATH）
+* **可选加速**：NVIDIA 驱动与 CUDA Toolkit，用于 GPU 加速训练
+
+脚本会自动安装以下 Python 库（使用 TUNA 镜像）：
 
 ```
-3D-Gaussian-Splatting-Pipeline/
-├── data/
-│   ├── train_images/    # 多视角输入图片
-│   ├── test_images/     # 保留评估用测试图片
-│   └── videos/          # 原始视频文件（如有），例如 my_object.mp4
-├── gaussian_splatting/  # 官方 3D Gaussian Splatting 代码库
-├── nerf_pytorch/        # NeRF 官方/加速版代码库
-├── output/
-│   ├── gaussian/        # Gaussian Splatting 渲染结果
-│   ├── nerf_base/       # NeRF 基线渲染结果
-│   ├── nerf_acc/        # NeRF 加速版渲染结果
-│   └── gaussian.mp4     # 输出的视频文件
-├── environment.yml      # Conda 环境配置
-├── requirements.txt     # Python 依赖列表（pip）
-├── 3d_gaussian_splatting_pipeline.py  # 主脚本
-└── README.md            # 文档说明
+numpy
+Pillow
+scikit-image
+torch
+torchvision
+imageio-ffmpeg
 ```
 
-## Installation
-
-使用 Conda（推荐）或 pip 安装依赖：
-
-```bash
-conda env create -f environment.yml
-conda activate gaussian_splat
-```
-
-或者：
+如需手动安装：
 
 ```bash
 pip install -r requirements.txt
 ```
 
-确保已安装：
+---
 
-* COLMAP（命令行工具在 PATH 中）
-* CUDA Toolkit + GPU 驱动（若使用 GPU）
+## 快速使用指南
 
-## Data Preparation
-
-### 输入多视角图片
-
-在开始之前，请先确保文件夹已创建：
-
-```bash
-mkdir -p data/train_images data/test_images
-```
-
-将所有拍摄的 `.jpg`/`.png` 图片直接放入 `data/train_images/` 文件夹。
-
-* 如果你只有照片，不需要 `data/videos/`。
-* 脚本会自动遍历 `data/train_images/` 中的所有图片进行后续处理。
-
-### 输入视频
-
-如果你是通过视频拍摄：
-
-1. 将视频文件放入 `data/videos/`（例如 `data/videos/my_object.mp4`）。
-2. 使用 FFmpeg 提取视频帧到 `data/train_images/`：
+1. 克隆仓库并进入目录：
 
    ```bash
-   mkdir -p data/train_images
-   ffmpeg -i data/videos/my_object.mp4 data/train_images/frame_%04d.png
    ```
-3. 然后仍通过 `--images data/train_images` 参数进行管道流程。
+
+git clone https\://<your-repo-url>.git
+cd <repo-folder>
+
+````
+2. 执行脚本：
+   ```bash
+python main.py
+````
+
+3. 按提示完成：
+
+   * 选择 **训练视频**（或取消后选择**训练图片**文件夹）
+   * 选择 **测试视频**（或取消后选择**测试图片**文件夹）
+4. 等待脚本自动完成所有步骤。
+
+执行结束后，查看 `output/`：
+
+* `colmap/transforms.json`: 相机参数文件
+* `gaussian/gaussian.mp4`: 3D Gaussian Splatting 渲染视频
+* `nerf_base/renders/`、`nerf_acc/renders/`: NeRF 渲染结果
+* 日志中显示的 PSNR/SSIM 对比结果
 
 ---
 
-## Usage
+## 命令行参数
 
-```bash
-python 3d_gaussian_splatting_pipeline.py \
-    --images data/train_images \
-    --test_images data/test_images
+```text
+--gaussian_repo   3D Gaussian Splatting 仓库路径，默认 `gaussian_splatting`
+--nerf_repo       NeRF 代码仓库路径，默认 `nerf_pytorch`
+--render_path     自定义渲染轨迹 JSON
+--output          输出目录，默认 `output`
 ```
 
+示例：
+
 ```bash
-python 3d_gaussian_splatting_pipeline.py \
-    --images data/train_images \
-    --test_images data/test_images
+python main.py \
+  --gaussian_repo ./3d-gaussian-splatting \
+  --nerf_repo ./nerf_pytorch \
+  --render_path ./path/render_trajectory.json \
+  --output ./results
 ```
 
-脚本将：
+---
 
-1. 使用 COLMAP 执行特征提取、匹配及稀疏重建，生成 `data/colmap/transforms.json`
-2. 调用 `gaussian_splatting/train.py` 训练 3D Gaussian 模型
-3. 渲染新视角视频，结果保存为 `output/gaussian.mp4`
-4. 训练 NeRF 基线及加速版，并在 `output/nerf_base/`、`output/nerf_acc/` 生成渲染图像
-5. 对比三种方法在 `data/test_images/` 上的 PSNR/SSIM，日志输出评估结果
+## 报告与分析
 
-## Video Output Location
+可将脚本中生成的 PSNR/SSIM 数值导出为 CSV/JSON，用于撰写实验报告及性能分析。
 
-渲染得到的视频文件默认保存在项目根目录下的 `output/gaussian.mp4`。你也可通过脚本中的 `OUTPUT_DIR` 常量修改保存位置。
-
+如需进一步定制或有任何问题，请提交 Issue 或联系维护者。
